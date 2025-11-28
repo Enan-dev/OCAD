@@ -6,7 +6,7 @@ import csv
 from datetime import datetime
 
 
-# Initialize MediaPipe modules
+
 mp_face_mesh = mp.solutions.face_mesh
 mp_face_detection = mp.solutions.face_detection
 mp_drawing = mp.solutions.drawing_utils
@@ -14,7 +14,7 @@ mp_drawing_styles = mp.solutions.drawing_styles
 
 class AttentionTracker:
     def __init__(self):
-        # Initialize models
+        
         self.face_mesh = mp_face_mesh.FaceMesh(
             max_num_faces=50,
             refine_landmarks=True,
@@ -26,13 +26,13 @@ class AttentionTracker:
             min_detection_confidence=0.7
         )
         
-        # Define eye landmarks
+       
         self.LEFT_EYE = [33, 133]          # Outer and inner corners
         self.RIGHT_EYE = [362, 263]
         self.LEFT_IRIS = [468]             # Center of left iris
         self.RIGHT_IRIS = [473]            # Center of right iris
         
-        # Expression landmarks
+      
         self.EXPRESSION_LANDMARKS = {
             'left_mouth': 61,
             'right_mouth': 291,
@@ -46,54 +46,53 @@ class AttentionTracker:
             'chin': 152
         }
         
-        # Head pose landmarks
+      
         self.HEAD_POSE_LANDMARKS = [1, 152, 33, 263, 61, 291]
         self.MODEL_POINTS = np.array([
-            (0.0, 0.0, 0.0),       # Nose tip
-            (0.0, -330.0, -65.0),  # Chin
+            (0.0, 0.0, 0.0),          # Nose tip
+            (0.0, -330.0, -65.0),     # Chin
             (-225.0, 170.0, -135.0),  # Left eye left corner
             (225.0, 170.0, -135.0),   # Right eye right corner
             (-150.0, -150.0, -125.0), # Left mouth corner
             (150.0, -150.0, -125.0)   # Right mouth corner
         ], dtype=np.float64)
         
-        # Attention tracking variables
+        
         self.attention_data = {}
         self.last_attention_time = time.time()
-        self.attention_threshold = 3  # Seconds of inattention to trigger alert
+        self.attention_threshold = 3  
         self.attention_warning = False
         
-        # Expression thresholds
+        
         self.SMILE_THRESH = 0.30
         self.SAD_MOUTH_SLOPE_THRESH = 0.015
         self.SAD_EYEBROW_HEIGHT = 0.05
         self.ANGRY_EYEBROW_DISTANCE = 0.06
         self.ANGRY_EYEBROW_HEIGHT = 0.035
         
-        # Status colors
         self.COLORS = {
             "attentive": (0, 255, 0),        # Green
             "looking_away": (0, 165, 255),   # Orange
-            "distracted": (0, 0, 255),       # Red
-            "engaged": (0, 255, 255),        # Yellow
-            "confused": (255, 0, 0),         # Blue
-            "bored": (128, 0, 128)           # Purple
+            "distracted": (0, 0, 255),       
+            "engaged": (0, 255, 255),       
+            "confused": (255, 0, 0),        
+            "bored": (128, 0, 128)          
         }
     
     def distance(self, p1, p2):
-        """Calculate Euclidean distance between two points"""
+        
         return np.sqrt((p1.x - p2.x)**2 + (p1.y - p2.y)**2)
     
     def get_gaze_ratio(self, eye_corner1, eye_corner2, iris_center):
-        """Calculate gaze direction ratio"""
+        
         eye_width = self.distance(eye_corner1, eye_corner2)
         iris_dist = self.distance(eye_corner1, iris_center)
         ratio = iris_dist / eye_width if eye_width != 0 else 0
         return ratio
     
     def analyze_gaze(self, landmarks, face_id):
-        """Determine gaze direction and attention level"""
-        # Get eye and iris points
+        
+       
         left_eye_outer = landmarks[self.LEFT_EYE[0]]
         left_eye_inner = landmarks[self.LEFT_EYE[1]]
         right_eye_inner = landmarks[self.RIGHT_EYE[1]]
@@ -101,11 +100,11 @@ class AttentionTracker:
         left_iris = landmarks[self.LEFT_IRIS[0]]
         right_iris = landmarks[self.RIGHT_IRIS[0]]
         
-        # Calculate gaze ratios
+        
         left_ratio = self.get_gaze_ratio(left_eye_outer, left_eye_inner, left_iris)
         right_ratio = self.get_gaze_ratio(right_eye_inner, right_eye_outer, right_iris)
         
-        # Determine gaze direction
+        
         if left_ratio < 0.35 or right_ratio < 0.35:
             gaze_status = "Looking Left"
             attention = "distracted"
@@ -119,7 +118,7 @@ class AttentionTracker:
             gaze_status = "Attentive"
             attention = "attentive"
         
-        # Update attention data
+        
         current_time = time.time()
         if face_id not in self.attention_data:
             self.attention_data[face_id] = {
@@ -131,7 +130,7 @@ class AttentionTracker:
             self.attention_data[face_id]["last_attentive"] = current_time
             self.attention_warning = False
         else:
-            # Check if attention has been lost for too long
+           
             if current_time - self.attention_data[face_id]["last_attentive"] > self.attention_threshold:
                 attention = "distracted"
                 self.attention_warning = True
@@ -140,29 +139,29 @@ class AttentionTracker:
     
     def analyze_expression(self, landmarks):
         """Determine facial expression"""
-        # Extract expression landmarks
+       
         points = {}
         for name, idx in self.EXPRESSION_LANDMARKS.items():
             points[name] = landmarks[idx]
         
-        # Calculate facial metrics
+        
         face_height = self.distance(points['nose_tip'], points['chin'])
         
-        # Mouth features
+       
         mouth_width = self.distance(points['left_mouth'], points['right_mouth'])
         mouth_open = self.distance(points['top_lip'], points['bottom_lip'])
         mouth_ratio = mouth_open / mouth_width
         
-        # Eyebrow features
+        
         eyebrow_distance = self.distance(points['left_eyebrow_inner'], points['right_eyebrow_inner'])
         eyebrow_height_l = (points['nose_tip'].y - points['left_eyebrow_inner'].y) / face_height
         eyebrow_height_r = (points['nose_tip'].y - points['right_eyebrow_inner'].y) / face_height
         eyebrow_avg_height = (eyebrow_height_l + eyebrow_height_r) / 2
         
-        # Mouth corner slope
+       
         mouth_corner_diff_y = points['left_mouth'].y - points['right_mouth'].y
         
-        # Determine expression
+        
         if mouth_ratio > self.SMILE_THRESH:
             expression = "Smiling"
             engagement = "engaged"
@@ -179,29 +178,27 @@ class AttentionTracker:
         return expression, engagement
     
     def analyze_head_pose(self, landmarks, frame, camera_matrix, dist_coeffs):
-        """Estimate head pose direction"""
         h, w = frame.shape[:2]
         
-        # Get head pose landmarks
+        
         image_points = np.array([
             [landmarks[i].x * w, landmarks[i].y * h] for i in self.HEAD_POSE_LANDMARKS
         ], dtype=np.float64)
         
-        # Solve PnP for head pose
         success, rotation_vector, translation_vector = cv2.solvePnP(
             self.MODEL_POINTS, image_points, camera_matrix, dist_coeffs)
         
-        # Project a point in front of the nose
+        
         nose_end_point3D = np.array([[0, 0, 1000.0]])
         nose_end_point2D, _ = cv2.projectPoints(
             nose_end_point3D, rotation_vector, translation_vector, camera_matrix, dist_coeffs)
         
-        # Draw head pose direction
+        
         p1 = (int(image_points[0][0]), int(image_points[0][1]))  # Nose tip
         p2 = (int(nose_end_point2D[0][0][0]), int(nose_end_point2D[0][0][1]))
         cv2.line(frame, p1, p2, (0, 255, 0), 2)
         
-        # Draw head bounding box
+        
         x_coords = [int(pt[0]) for pt in image_points]
         y_coords = [int(pt[1]) for pt in image_points]
         x_min, x_max = min(x_coords) - 20, max(x_coords) + 20
@@ -209,8 +206,7 @@ class AttentionTracker:
         return (x_min, y_min, x_max, y_max)
     
     def track_attention(self):
-        """Main function to track student attention"""
-        # Prepare CSV logging
+        
         csv_file = open("attention_log.csv", mode='w', newline='')
         csv_writer = csv.writer(csv_file)
         csv_writer.writerow(["Timestamp", "Student_ID", "Gaze_Status", "Attention", 
@@ -220,7 +216,7 @@ class AttentionTracker:
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
         
-        # Attention metrics
+       
         total_students = 0
         attentive_students = 0
         
@@ -233,7 +229,7 @@ class AttentionTracker:
             h, w = frame.shape[:2]
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             
-            # Build camera matrix for head pose
+      
             focal_length = w
             center = (w/2, h/2)
             camera_matrix = np.array([
@@ -243,24 +239,24 @@ class AttentionTracker:
             ], dtype=np.float64)
             dist_coeffs = np.zeros((4, 1))
             
-            # Reset counters
+           
             total_students = 0
             attentive_students = 0
             
-            # Process with face mesh
+           
             results = self.face_mesh.process(rgb)
             if results.multi_face_landmarks:
                 for face_id, face_landmarks in enumerate(results.multi_face_landmarks):
                     total_students += 1
                     landmarks = face_landmarks.landmark
                     
-                    # Analyze gaze and attention
+                    
                     gaze_status, attention = self.analyze_gaze(landmarks, face_id)
                     
-                    # Analyze expression
+                    
                     expression, engagement = self.analyze_expression(landmarks)
                     
-                    # Combine attention and engagement
+                   
                     if attention == "attentive" and engagement == "engaged":
                         overall_status = "Focused"
                         status_color = self.COLORS["attentive"]
@@ -277,23 +273,23 @@ class AttentionTracker:
                     if attention == "attentive":
                         attentive_students += 1
                     
-                    # Analyze head pose
+                    
                     bbox = self.analyze_head_pose(landmarks, frame, camera_matrix, dist_coeffs)
                     
-                    # Draw bounding box with status color
+                   
                     cv2.rectangle(frame, (bbox[0], bbox[1]), (bbox[2], bbox[3]), status_color, 2)
                     
-                    # Draw status text
+                    
                     status_text = f"Student {face_id+1}: {overall_status}"
                     cv2.putText(frame, status_text, (bbox[0], bbox[1]-10), 
                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, status_color, 2)
                     
-                    # Draw iris centers
+                  
                     for idx in [self.LEFT_IRIS[0], self.RIGHT_IRIS[0]]:
                         cx, cy = int(landmarks[idx].x * w), int(landmarks[idx].y * h)
                         cv2.circle(frame, (cx, cy), 3, (0, 255, 0), -1)
                     
-                    # Log data to CSV
+                   
                     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     csv_writer.writerow([
                         timestamp,
@@ -305,32 +301,32 @@ class AttentionTracker:
                         overall_status
                     ])
             
-            # Calculate class attention percentage
+            
             if total_students > 0:
                 attention_percent = (attentive_students / total_students) * 100
                 attention_text = f"Class Attention: {attention_percent:.1f}%"
                 cv2.putText(frame, attention_text, (20, 40), 
                            cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
                 
-                # Show attention warning if needed
+                
                 if self.attention_warning:
                     warning_text = "Warning: Student distraction detected!"
                     cv2.putText(frame, warning_text, (w//2-250, 40), 
                                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
             
-            # Display frame
+           
             cv2.imshow("Student Attention Tracker", frame)
             
-            # Exit on ESC
+            
             if cv2.waitKey(5) & 0xFF == 27:
                 break
         
-        # Clean up
+        
         cap.release()
         csv_file.close()
         cv2.destroyAllWindows()
 
-# Run the attention tracker
+
 if __name__ == "__main__":
     tracker = AttentionTracker()
     tracker.track_attention()
